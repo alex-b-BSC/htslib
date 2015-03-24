@@ -1,29 +1,42 @@
+UNAME=$(shell uname)
+ifeq ($(UNAME),Darwin)
+	MAC=1
+else
+	ifeq ($(UNAME),CYGWIN_NT-6.1)
+	WIN=1
+	endif
+endif
+
 CC=			gcc
-CFLAGS=		-g -Wall -O2 -Wc++-compat
+ifdef WIN
+	CFLAGS=		-m64 -D__mingw__ -g -Wall -Wc++-compat -O2
+	LIBLIST = -Lhtslib -lhts -lpthread -lz -lm -lws2_32
+else
+	CFLAGS=		-g -Wall -Wc++-compat -O2
+	LIBLIST = -Lhtslib -lhts -lpthread -lz -lm
+endif
+ 
+
 DFLAGS=
-LOBJS=		knetfile.o bgzf.o hts.o vcf.o sam.o tbx.o synced_bcf_reader.o vcfutils.o
-INCLUDES=
-LIBPATH=
+OBJS=		main.o samview.o vcfview.o bamidx.o bcfidx.o bamshuf.o bam2fq.o tabix.o \
+			abreak.o bam2bed.o vcfcheck.o vcfisec.o vcfmerge.o
+INCLUDES=	-Ihtslib
+PROG=		htscmd
 
 .SUFFIXES:.c .o
-.PHONY:lib
+.PHONY:all lib
 
 .c.o:
 		$(CC) -c $(CFLAGS) $(DFLAGS) $(INCLUDES) $< -o $@
 
-libhts.a:$(LOBJS)
-		$(AR) -csru $@ $(LOBJS)
+all:$(PROG)
 
-bgzf.o:bgzf.c bgzf.h knetfile.h khash.h
-		$(CC) -c $(CFLAGS) $(DFLAGS) -D_USE_KNETFILE -DBGZF_MT -DBGZF_CACHE $(INCLUDES) bgzf.c -o $@
+lib:
+		cd htslib; $(MAKE) CC="$(CC)" CFLAGS="$(CFLAGS)" libhts.a || exit 1; cd ..
 
-knetfile.o:knetfile.h
-hts.o:hts.h bgzf.h khash.h kseq.h
-vcf.o:vcf.h bgzf.h kstring.h khash.h hts.h
-sam.o:sam.h bgzf.h kstring.h hts.h
-tbx.o:tbx.h bgzf.h kstring.h hts.h
-synced_bcf_reader.o:vcf.h bgzf.h kstring.h khash.h hts.h tbx.h
-vcfutils.o:vcf.h bgzf.h kstring.h khash.h hts.h tbx.h
+htscmd:lib $(OBJS)
+		$(CC) $(CFLAGS) -o $@ $(OBJS) $(LIBLIST)
+
 
 clean:
-		rm -fr gmon.out *.o a.out *.dSYM *~ *.a *.so *.dylib
+		rm -fr gmon.out *.o a.out *.dSYM *~ $(PROG); cd htslib; $(MAKE) clean; cd ..
